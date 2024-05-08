@@ -1,0 +1,4 @@
+Make sure to copy your personal access token now as you will not be able to see this again.
+
+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
+Expires on Tue, Aug 6 2024.

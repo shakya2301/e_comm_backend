@@ -11,4 +11,4 @@ class apiResponse
     }
 }
 
-export default apiResponse //exporting the class to be used in other files.
+export {apiResponse} //exporting the class object to be used in other files.

@@ -1,6 +1,6 @@
 import { User } from "../models/users.model.js";
 import asyncHandler from "../utils/asyncHandler.js";
-import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import { uploadOnCloudinary, deleteFromCloudinary } from "../utils/cloudinary.js";
 import { apiResponse } from "../utils/apiResponse.js";
 import apiError from "../utils/apiError.js";
 import jwt from "jsonwebtoken";
@@ -80,7 +80,7 @@ export const loginUser = asyncHandler(async (req, res) => {
   );
 
   user.refreshToken = refreshToken;
-  user.save({ validateBeforeSave: false });
+  await user.save({ validateBeforeSave: false });
   const userdata = await User.findById(user._id).select(
     "-password -refreshToken"
   );
@@ -204,15 +204,30 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
 });
 
 //upload avatar is a secured route operation.
+// pending delete the previous image on cloudinary: done
 export const uploadAvatar = asyncHandler(async (req, res) => {
   const avatar = req.file?.path;
+  console.log(avatar);
   if (!avatar) {
     throw new apiError(400, "No file found");
   }
   const user = User.findById(req.user?.id); //from the auth middleware.
-
+  
   if (!user) {
     throw new apiError(404, "User not found");
+  }
+  
+
+  // delete the previous image from cloudinary...
+
+  const parts = req.user.pfp?.split("/");
+  const oldAvatarPublicId = parts[parts.length - 1].split(".")[0];
+
+  if (parts) {
+    const deleteOldAvatar = await deleteFromCloudinary(oldAvatarPublicId);
+    if (!deleteOldAvatar) {
+      throw new apiError(500, "Error in deleting old avatar");
+    }
   }
 
   // Assuming `avatar` is the path to the image file to be uploaded
@@ -235,7 +250,6 @@ export const uploadAvatar = asyncHandler(async (req, res) => {
     .status(200)
     .json(new apiResponse(200, us, "Avatar uploaded successfully"));
 });
-// pending delete the previous image on cloudinary.
 
 //sends email with the OTP generation, random 6 digit number, stores in encrypted form in cookies.
 export const sendEmail = asyncHandler(async (req, res) => {
@@ -323,7 +337,6 @@ export const verifyOtp = asyncHandler(async (req, res) => {
 });
 
 //change password, knowing the old password.
-
 export const changePassword = asyncHandler(async (req, res) => {
   const { oldpassword, newpassword } = req.body;
 
@@ -363,22 +376,20 @@ export const changePassword = asyncHandler(async (req, res) => {
 });
 
 //forgot password: 1. Send email with the link to the page with the token.
-
-
 //sends mail with the link to the page with the token.
-export const forgotPassword = asyncHandler(async(req,res)=>{
-  const {email} = req.body;
-  if(!email){
-    throw new apiError(400,"Please provide email");
+export const forgotPassword = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    throw new apiError(400, "Please provide email");
   }
-  const user = await User.findOne({email});
-  if(!user){
-    throw new apiError(404,"User not found");
+  const user = await User.findOne({ email });
+  if (!user) {
+    throw new apiError(404, "User not found");
   }
   const userid = user._id;
   const token = jwt.sign(
     {
-      id: userid
+      id: userid,
     },
     `${process.env.TOKEN_SECRET}`,
     {
@@ -386,17 +397,17 @@ export const forgotPassword = asyncHandler(async(req,res)=>{
     }
   );
 
-  const link = `http://localhost:8000/api/resetpassword/${token}`;
+  const link = `http://localhost:8000/api/user/resetpassword/${token}`;
 
   const transporter = nodemailer.createTransport({
     host: "smtp.gmail.com",
     port: 587,
-    secure:false,
-    requireTLS:true,
+    secure: false,
+    requireTLS: true,
     auth: {
       user: "ecomm7583@gmail.com",
-      pass: "rxljbhjigpehyiao"
-    }
+      pass: "rxljbhjigpehyiao",
+    },
   });
 
   const mailOptions = {
@@ -404,37 +415,36 @@ export const forgotPassword = asyncHandler(async(req,res)=>{
     to: `${email}`,
     subject: "Password reset link",
     text: "Greetings from the platform. Please click on the link below to reset your password.",
-    html: `<a href="${link}">Reset Password</a>`
-  }
+    html: `<a href="${link}">Reset Password</a>`,
+  };
 
   transporter.sendMail(mailOptions, function (error, info) {
     if (error) {
       console.log(error);
-      throw new apiError(500, error.message,"Error sending email");
+      throw new apiError(500, error.message, "Error sending email");
     }
   });
-  res.status(200)
-  .json(new apiResponse(200,"Email sent successfully"));
-})
+  res.status(200).json(new apiResponse(200, "Email sent successfully"));
+});
 
 //the function to actually reset the password once you reach the page.
-export const resetPassword = asyncHandler(async(req,res)=>{
-  const {token} = req.params;
-  const {password} = req.body;
+export const resetPassword = asyncHandler(async (req, res) => {
+  const { token } = req.params;
+  const { password } = req.body;
 
-  console.log(token,password);
-  if(!token || !password){
-    throw new apiError(400,"Please provide token and password");
+  console.log(token, password);
+  if (!token || !password) {
+    throw new apiError(400, "Please provide token and password");
   }
-  const decodedToken = jwt.verify(token,`${process.env.TOKEN_SECRET}`);
-  if(!decodedToken){
-    throw new apiError(401,"Invalid token");
+  const decodedToken = jwt.verify(token, `${process.env.TOKEN_SECRET}`);
+  if (!decodedToken) {
+    throw new apiError(401, "Invalid token");
   }
   const user = await User.findById(decodedToken.id);
-  if(!user){
-    throw new apiError(404,"User not found");
+  if (!user) {
+    throw new apiError(404, "User not found");
   }
-  const encryptedpassword = await bcrypt.hash(password,10);
+  const encryptedpassword = await bcrypt.hash(password, 10);
   const newuser = await User.findByIdAndUpdate(
     decodedToken.id,
     {
@@ -448,8 +458,7 @@ export const resetPassword = asyncHandler(async(req,res)=>{
   res
     .status(200)
     .json(new apiResponse(200, newuser, "Password changed successfully"));
-})
-
+});
 
 //works
 export const deleteUser = asyncHandler(async (req, res) => {
@@ -461,6 +470,17 @@ export const deleteUser = asyncHandler(async (req, res) => {
   if (!user) {
     throw new apiError(404, "User not found");
   }
+
+  if(user.pfp){
+    const parts = user.pfp?.split("/");
+    const oldAvatarPublicId = parts[parts.length - 1].split(".")[0];
+    if (parts) {
+      const deleteOldAvatar = await deleteFromCloudinary(oldAvatarPublicId);
+      if (!deleteOldAvatar) {
+        throw new apiError(500, "Error in deleting old avatar");
+      }
+    }
+  }
   res
     .status(200)
     .clearCookie("accessToken")
@@ -469,6 +489,7 @@ export const deleteUser = asyncHandler(async (req, res) => {
     .json(new apiResponse(200, user, "User deleted successfully"));
 });
 
+//works
 export const displayUser = asyncHandler(async (req, res) => {
   const result = req?.user;
   if (!result) {
@@ -485,6 +506,9 @@ export const modifyUser = asyncHandler(async (req, res) => {
     throw new apiError(400, "Please fill atleast one field to update");
   }
 
+  const flag = email === undefined;
+  console.log(flag);
+
   const newname = name || req.user?.name;
   const newemail = email || req.user?.email;
   const newphone = phone || req.user?.phone;
@@ -496,12 +520,11 @@ export const modifyUser = asyncHandler(async (req, res) => {
         name: newname,
         email: newemail,
         phone: newphone,
+        isVerified: flag,
       },
     },
     { new: true }
   ).select("-password -refreshToken");
 
-  res
-    .status(200)
-    .json(new apiResponse(200, user, "User updated successfully"));
-})
+  res.status(200).json(new apiResponse(200, user, "User updated successfully"));
+});

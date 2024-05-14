@@ -33,7 +33,12 @@ app.use(cookieParser()); // the middleware offered by express to parse incoming 
 
 
 import userRouter from './routes/user.routes.js'
+import sellerRouter from './routes/seller.routes.js'
+import categoryRouter from './routes/category.routes.js'
 
 //routes declaration
-app.use("/api", userRouter) // http://localhost:8000/api/v1/users/register
+app.use("/api/user", userRouter) // http://localhost:8000/api/v1/users/register
+app.use("/api/seller", sellerRouter) // http://localhost:8000/api/v1/sellers/register
+app.use("/api/category", categoryRouter) // http://localhost:8000/api/v1/categories/create
+
 export {app}; //exporting the app to be used in other files.

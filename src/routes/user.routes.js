@@ -12,10 +12,11 @@ import {
   displayUser,
   modifyUser,
   forgotPassword,
-  resetPassword
+  resetPassword,
+  makeAdmin
 } from "../controllers/users.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
-import { authjwt } from "../middlewares/auth.middleware.js";
+import { authjwt, adminauth } from "../middlewares/auth.middleware.js";
 
 const router = express.Router();
 
@@ -38,5 +39,9 @@ router.route("/modify").post(authjwt,upload.none(), modifyUser);
 
 router.route("/forgotpassword").post(upload.none(), forgotPassword);
 router.route("/resetpassword/:token").get(upload.none(), resetPassword);
+
+//admin routes(special powers);
+
+router.route("/makeadmin").post(authjwt, adminauth,upload.none(), makeAdmin);
 
 export default router;

@@ -1,34 +1,38 @@
 import { Category } from "../models/categories.model.js";
+import { Subcategory } from "../models/subcategories.model.js";
 import apiError from "../utils/apiError.js";
 import { apiResponse } from "../utils/apiResponse.js";
 import asyncHandler from "../utils/asyncHandler.js";
+import slugify from 'slugify';
 
 //works
 export const createCategory = asyncHandler(async(req,res)=> {
-    const {name, description} = req.body;
+    let {name, description} = req.body;
     if(!name || !description){
         res.status(400);
         throw new apiError(400 ,'All fields are required');
     }
-    console.log(name,description);
-    if(await Category.findOne({name}))
+    name = slugify(name, {lower: true});
+
+    if(await Category.findOne({name:name}))
     {
         res.status(400);
         throw new apiError(400, 'Category already exists');
     }
-    const category = await Category.create({name, description});
+    const category = await Category.create({name:name, description:description});
+    console.log(category)
     const data = await category.save();
     res.status(200)
     .json(
         new apiResponse(200,
-        data,
-        'Category created successfully')
-    )
-})
-
-//works
+            data,
+            'Category created successfully')
+        )
+    })
+    
+    //works
 export const getAllCategories = asyncHandler(async(req,res)=> {
-    const categories = await Category.find();
+    const categories = await Category.find().select("-__v -_id ");
     if(!categories){
         res.status(404);
         throw new apiError(400, 'No categories found');
@@ -112,6 +116,8 @@ export const deleteCategory = asyncHandler(async(req,res)=> {
         res.status(404);
         throw new Error('Category not found');
     }
+    const deletedSubcategories = await Subcategory.deleteMany({ category: category._id });
+
     const resp = await Category.findOneAndDelete({name: categoryName});
     if(!resp){
         res.status(404);
@@ -119,8 +125,8 @@ export const deleteCategory = asyncHandler(async(req,res)=> {
     }
     res.status(200)
     .json(
-        200,
+        new apiResponse(200,
         resp,
-        'Category deleted successfully'
+        'Category deleted successfully')
     )
 })

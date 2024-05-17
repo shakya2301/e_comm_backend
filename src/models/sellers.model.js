@@ -1,6 +1,7 @@
 import mongoose, {Schema} from 'mongoose'
 import asyncHandler from '../utils/asyncHandler.js';
 import bcrypt from 'bcrypt';
+import mongooseAggregatePaginate from 'mongoose-aggregate-paginate-v2';
 
 const sellerSchema = new Schema(
     {
@@ -39,18 +40,13 @@ const sellerSchema = new Schema(
             type: Boolean,
             default: false,
         },
-        niche: {
-            type: Schema.Types.Mixed,
+        niche: [{
+            type: Schema.Types.ObjectId,
             required: true,
             trim: true,
             lowercase: true
-        },
-        subNiche: {
-            type: Schema.Types.Mixed,
-            required: true,
-            trim: true,
-            lowercase: true
-        },
+        }],
+
         isAuthorized: {
             type: Boolean,
             default: false
@@ -60,6 +56,8 @@ const sellerSchema = new Schema(
         timestamps: true
     }
 )
+
+sellerSchema.plugin(mongooseAggregatePaginate);
 
 sellerSchema.pre('save', async function(next){
     if(!this.isModified('password')) {
@@ -71,13 +69,13 @@ sellerSchema.pre('save', async function(next){
 })
 
 sellerSchema.pre('save', function(next) {
-    if (this.niche.length == 1 && this.subNiche.length == 1){
-        this.niche = this.niche[0];
-        this.subNiche = this.subNiche[0];
-        next();
-    } else {
-        throw new Error('Niche and SubNiche must be an array of atleast one element');
+
+    if(!this.niche || this.niche.length === 0) {
+        console.log('No niche provided');
+        return next();
     }
+    console.log(this.niche);
+    next();
 });
 
 sellerSchema.methods.matchPasswords = async function(password){

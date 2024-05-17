@@ -1,4 +1,7 @@
 import { Seller } from "../models/sellers.model.js";
+import { Category } from "../models/categories.model.js";
+import { Subcategory } from "../models/subcategories.model.js";
+import { Product } from "../models/products.model.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import {
   uploadOnCloudinary,
@@ -9,40 +12,52 @@ import apiError from "../utils/apiError.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
+import { sendMail } from "../utils/mailservice.js";
+import slugify from "slugify";
+import { Schema } from "mongoose";
 
 export const registerSeller = asyncHandler(async (req, res) => {
-  const { name, email, phone, password, GSTIN, niche, subNiche } = req.body;
-
-  console.log(name, email, phone, password, GSTIN, niche, subNiche);
-
-  if (!name || !email || !phone || !password || !GSTIN || !niche || !subNiche) {
+  let { name, email, phone, password, GSTIN, niche } = req.body;
+  console.log(name, email, phone, password, GSTIN, niche);
+  if (!name || !email || !phone || !password || !GSTIN || !niche ) {
     throw new apiError(400, "Please provide all the necessary details");
   }
-
   const seller = await Seller.findOne({
     $or: [{ email }, { phone }, { GSTIN }],
   }).exec();
-
   if (seller) {
     throw new apiError(400, "Seller already exists");
   }
+  niche = niche.split(",");
+  if (niche.length === 0) {
+    throw new apiError(400, "Please provide at least one niche");
+  }
 
+  console.log(niche);
+
+
+  const nicheIds = await Promise.all(
+    niche.map(async (n) => {
+      const category = await Category.findOne({ name: slugify(n) }).exec();
+      return category ? (category._id) : null;
+    })
+  );
+  console.log((nicheIds));
   const newSeller = new Seller({
     name,
     email,
     phone,
     password,
     GSTIN,
-    niche: Array(niche),
-    subNiche: Array(subNiche),
+    niche: (nicheIds),
   });
-
   const data = await newSeller.save();
-
   return res
     .status(200)
     .json(new apiResponse(200, data, "Seller registered successfully"));
 });
+
+
 
 export const loginSeller = asyncHandler(async (req, res) => {
   const { email, phone, password } = req.body;
@@ -89,6 +104,57 @@ export const loginSeller = asyncHandler(async (req, res) => {
     { new: true }
   ).exec();
 
+  const pipeline = [
+    {
+      $match: {
+        _id: seller._id,
+      },
+    },
+    {
+      $lookup: {
+        from: "categories",
+        localField: "niche",
+        foreignField: "_id",
+        as: "niche",
+      },
+    },
+    {
+      $unwind: "$niche",
+    },
+    {
+      $group: {
+        _id: "$_id",
+        name: { $first: "$name" },
+        email: { $first: "$email" },
+        phone: { $first: "$phone" },
+        GSTIN: { $first: "$GSTIN" },
+        pfp: { $first: "$pfp" },
+        isVerified: { $first: "$isVerified" },
+        isAuthorized: { $first: "$isAuthorized" },
+        createdAt: { $first: "$createdAt" },
+        updatedAt: { $first: "$updatedAt" },
+        niche: { $push: "$niche.name" },
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        name: 1,
+        email: 1,
+        phone: 1,
+        GSTIN: 1,
+        niche: 1,
+        pfp: 1,
+        isVerified: 1,
+        isAuthorized: 1,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    },
+  ]
+
+  const sellerData = await Seller.aggregate(pipeline);
+
   res
     .status(200)
     .cookie("refreshToken", refreshToken, {
@@ -99,15 +165,63 @@ export const loginSeller = asyncHandler(async (req, res) => {
       httpOnly: true,
       secure: true,
     })
-    .json(new apiResponse(200, { data }, "Seller logged in successfully"));
+    .json(new apiResponse(200, sellerData, "Seller logged in successfully"));
 });
 
 export const getSellerProfile = asyncHandler(async (req, res) => {
-  const seller = req.seller;
+  const sellerid = req.seller._id;
 
-  if (!seller) {
-    throw new apiError(400, "Seller not found");
-  }
+  const pipeline = [
+    {
+      $match: {
+        _id: sellerid,
+      },
+    },
+    {
+      $lookup: {
+        from: "categories",
+        localField: "niche",
+        foreignField: "_id",
+        as: "niche",
+      },
+    },
+    {
+      $unwind: "$niche",
+    },
+    {
+      $group: {
+        _id: "$_id",
+        name: { $first: "$name" },
+        email: { $first: "$email" },
+        phone: { $first: "$phone" },
+        GSTIN: { $first: "$GSTIN" },
+        pfp: { $first: "$pfp" },
+        isVerified: { $first: "$isVerified" },
+        isAuthorized: { $first: "$isAuthorized" },
+        createdAt: { $first: "$createdAt" },
+        updatedAt: { $first: "$updatedAt" },
+        niche: { $push: "$niche.name" },
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        name: 1,
+        email: 1,
+        phone: 1,
+        GSTIN: 1,
+        niche: 1,
+        pfp: 1,
+        isVerified: 1,
+        isAuthorized: 1,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    },
+  ];
+  
+
+  const seller = await Seller.aggregate(pipeline);
 
   res
     .status(200)
@@ -239,33 +353,21 @@ export const sendEmail = asyncHandler(async (req, res) => {
     throw new apiError(400, "No email found");
   }
 
-  const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 587,
-    secure: false,
-    requireTLS: true,
-    auth: {
-      user: "ecomm7583@gmail.com",
-      pass: "rxljbhjigpehyiao",
-    },
-  });
-  const mailOptions = {
-    from: "ecomm7583@gmail.com",
-    to: `${selleremail}`,
-    subject: "Your verification OTP for the platform.",
-    text: `The verification code for your account is ${otp}. PLEASE DO NOT SHARE IT WITH ANYONE.`,
-  };
+  sendMail(selleremail, otp);
 
-  transporter.sendMail(mailOptions, function (error, info) {
-    if (error) {
-      console.log(error);
-      throw new apiError(500, "Error sending email");
+  const encryptedOTP = jwt.sign(
+    {
+      otp:otp,
+    },
+    `${process.env.TOKEN_SECRET}`,
+    {
+      expiresIn: "5m",
     }
-  });
-  const encryptedOTP = await bcrypt.hash(otp, 10);
+  );
+
   res
     .status(200)
-    .cookie("otp", encryptedOTP, {
+    .cookie("otp", String(encryptedOTP), {
       httpOnly: true,
       secure: true,
     })
@@ -287,7 +389,7 @@ export const verifyOtp = asyncHandler(async (req, res) => {
     throw new apiError(400, "No OTP found in cookies");
   }
 
-  const flag = await bcrypt.compare(otp, encryptedotp);
+  const flag = Object(jwt.verify(encryptedotp, `${process.env.TOKEN_SECRET}`)).otp === otp;
   if (!flag) {
     throw new apiError(401, "Invalid OTP");
   }
@@ -438,10 +540,13 @@ export const deleteSeller = asyncHandler(async (req, res) => {
     throw new apiError(404, "Seller not found");
   }
 
+  const products = await Product.find({ seller: req.seller?._id }).exec();
+
   const parts = req.seller.pfp?.split("/");
-  const oldAvatarPublicId = parts[parts.length - 1].split(".")[0];
+  
 
   if (parts) {
+    const oldAvatarPublicId = parts[parts.length - 1].split(".")[0];
     const deleteOldAvatar = await deleteFromCloudinary(oldAvatarPublicId);
     if (!deleteOldAvatar) {
       throw new apiError(500, "Error in deleting old avatar");

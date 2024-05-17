@@ -1,4 +1,6 @@
 import mongoose, {Schema} from 'mongoose';
+import mongooseaggregatePaginate from 'mongoose-aggregate-paginate-v2';
+import slugify from 'slugify';
 
 const subCategorySchema = new Schema(
     {
@@ -20,5 +22,12 @@ const subCategorySchema = new Schema(
         timestamps: true
     }
 );
+subCategorySchema.plugin(mongooseaggregatePaginate);
+
+subCategorySchema.pre('save', function(next){
+    const slug = slugify(this.name, {lower: true});
+    this.name = slug;
+    next();
+});
 
 export const Subcategory = mongoose.model('SubCategory', subCategorySchema);

@@ -1,7 +1,6 @@
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
-// import {reg} from './controllers/users.controller.js';
 
 
 
@@ -35,10 +34,14 @@ app.use(cookieParser()); // the middleware offered by express to parse incoming 
 import userRouter from './routes/user.routes.js'
 import sellerRouter from './routes/seller.routes.js'
 import categoryRouter from './routes/category.routes.js'
+import brandRouter from './routes/brand.routes.js'
+import productRouter from './routes/product.routes.js'
 
 //routes declaration
 app.use("/api/user", userRouter) // http://localhost:8000/api/v1/users/register
 app.use("/api/seller", sellerRouter) // http://localhost:8000/api/v1/sellers/register
 app.use("/api/category", categoryRouter) // http://localhost:8000/api/v1/categories/create
+app.use("/api/brands", brandRouter) // http://localhost:8000/api/v1/brands/create
+app.use("/api/products", productRouter) // http://localhost:8000/api/v1/products/create
 
 export {app}; //exporting the app to be used in other files.

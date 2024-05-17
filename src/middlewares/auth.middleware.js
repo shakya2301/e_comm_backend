@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import asyncHandler from '../utils/asyncHandler.js';
 import {User} from '../models/users.model.js';
+import {Cart} from '../models/carts.model.js';
 import {Seller} from '../models/sellers.model.js';
 import apiError from '../utils/apiError.js';
 
@@ -22,6 +23,7 @@ export const authjwt = asyncHandler( async(req,res,next,err)=>{
             throw new apiError(404,"User not found, invalid token");
         }
         req.user = user;
+        req.usercart = await Cart.findOne({user: user._id});
 
         next();
     } catch (error) {
@@ -67,4 +69,30 @@ export const adminauth = asyncHandler(async(req,res,next,err)=>{
 
     // console.log(isadmin.isAdmin);
     else throw new apiError(401, "Unauthorized, Admin only");
+})
+
+export const sellerverifiedauth = asyncHandler(async(req,res,next,err)=>{
+    const sellerid = req.seller._id;
+    if(!sellerid) {
+        throw new apiError(401,"No token provided, please login")
+    }
+    const isseller = await Seller.findById(sellerid).select("isVerified");
+
+    if(isseller.isVerified ==true) next();
+
+    // console.log(isadmin.isAdmin);
+    else throw new apiError(401, "Unauthorized, Seller not verified");
+})
+
+export const sellerauthorizedauth = asyncHandler(async(req,res,next,err)=>{
+    const sellerid = req.seller._id;
+    if(!sellerid) {
+        throw new apiError(401,"No token provided, please login")
+    }
+    const isseller = await Seller.findById(sellerid).select("isAuthorized");
+
+    if(isseller.isAuthorized ==true) next();
+
+    // console.log(isadmin.isAdmin);
+    else throw new apiError(401, "Unauthorized, Seller not authorized");
 })

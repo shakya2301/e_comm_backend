@@ -6,6 +6,8 @@ import apiError from "../utils/apiError.js";
 import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
 import bcrypt from "bcrypt";
+import {sendMail} from "../utils/mailservice.js";
+import { Cart } from "../models/carts.model.js";
 
 export const registerUser = asyncHandler(async (req, res) => {
   const { name, email, password, phone } = req.body;
@@ -267,30 +269,9 @@ export const sendEmail = asyncHandler(async (req, res) => {
     throw new apiError(400, "No email found");
   }
 
-  const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 587,
-    secure: false,
-    requireTLS: true,
-    auth: {
-      user: "ecomm7583@gmail.com",
-      pass: "rxljbhjigpehyiao",
-    },
-  });
-  const mailOptions = {
-    from: "ecomm7583@gmail.com",
-    to: `${useremail}`,
-    subject: "Your verification OTP for the platform.",
-    text: `The verification code for your account is ${otp}. PLEASE DO NOT SHARE IT WITH ANYONE.`,
-  };
+  sendMail(useremail, otp);
 
-  transporter.sendMail(mailOptions, function (error, info) {
-    if (error) {
-      console.log(error);
-      throw new apiError(500, "Error sending email");
-    }
-  });
-  const encryptedOTP = await bcrypt.hash(otp, 10);
+  const encryptedOTP = jwt.sign({ otp }, process.env.OTP_SECRET, { expiresIn: "5m" });
   res
     .status(200)
     .cookie("otp", encryptedOTP, {
@@ -305,6 +286,7 @@ export const verifyOtp = asyncHandler(async (req, res) => {
   if (req.user?.isVerified) {
     throw new apiError(400, "User is already verified");
   }
+
   const encryptedotp = req.cookies?.otp;
   const { otp } = req.body;
 
@@ -316,7 +298,8 @@ export const verifyOtp = asyncHandler(async (req, res) => {
     throw new apiError(400, "No OTP found in cookies");
   }
 
-  const flag = await bcrypt.compare(otp, encryptedotp);
+  const flag = Object(jwt.verify(encryptedotp, process.env.OTP_SECRET)).otp === otp;
+
   if (!flag) {
     throw new apiError(401, "Invalid OTP");
   }
@@ -331,9 +314,20 @@ export const verifyOtp = asyncHandler(async (req, res) => {
     { new: true }
   ).select("-password -refreshToken");
 
-  res
-    .status(200)
-    .json(new apiResponse(200, user, "User verified successfully"));
+  // Create cart on verification
+  let cart = await Cart.findOne({ user: req.user?._id });
+
+  if (!cart) {
+    const newCart = new Cart({
+      user: req.user?._id,
+    });
+
+    cart = await newCart.save();
+  } else {
+    cart = await Cart.findOneAndUpdate({ user: req.user._id }, { $set: { isBlocked: false } },{new:true});
+  }
+
+  res.status(200).json(new apiResponse(200, { user: user, cart: cart }, "User verified and cart created successfully"));
 });
 
 //change password, knowing the old password.
@@ -471,6 +465,8 @@ export const deleteUser = asyncHandler(async (req, res) => {
     throw new apiError(404, "User not found");
   }
 
+  const cart = await Cart.findOneAndDelete({ user: req.user?._id });
+
   if(user.pfp){
     const parts = user.pfp?.split("/");
     const oldAvatarPublicId = parts[parts.length - 1].split(".")[0];
@@ -486,45 +482,93 @@ export const deleteUser = asyncHandler(async (req, res) => {
     .clearCookie("accessToken")
     .clearCookie("refreshToken")
     .clearCookie("otp")
-    .json(new apiResponse(200, user, "User deleted successfully"));
+    .json(new apiResponse(200, {user,cart}, "User deleted successfully"));
 });
 
 //works
 export const displayUser = asyncHandler(async (req, res) => {
   const result = req?.user;
+  const cart = req?.usercart;
   if (!result) {
     throw new apiError(404, "No user found");
   }
-  res.status(200).json(new apiResponse(200, result, "User found successfully"));
+  res.status(200).json(new apiResponse(200, {result, cart}, "User found successfully"));
 });
 
 export const modifyUser = asyncHandler(async (req, res) => {
-  const { name, email, phone } = req.body;
+  let { name, email, phone } = req.body;
 
-  console.log(name, email, phone);
   if (!name && !email && !phone) {
-    throw new apiError(400, "Please fill atleast one field to update");
+    throw new apiError(400, "Please fill at least one field to update");
   }
 
-  const flag = email === undefined;
-  console.log(flag);
+  if((name== req.user?.name || !name) && (email== req.user?.email || !email) && (phone== req.user?.phone || !phone)){
+    throw new apiError(400, "No changes found");
+  }
 
-  const newname = name || req.user?.name;
-  const newemail = email || req.user?.email;
-  const newphone = phone || req.user?.phone;
+  let isVerified = req.user?.isVerified;
+  let isBlocked = req.user?.isBlocked;
 
-  const user = await User.findByIdAndUpdate(
-    req.user?._id,
-    {
-      $set: {
-        name: newname,
-        email: newemail,
-        phone: newphone,
-        isVerified: flag,
-      },
-    },
-    { new: true }
-  ).select("-password -refreshToken");
+  if (email && email !== req.user?.email) {
+    isVerified = false;
+    isBlocked = true;
+    await Cart.findOneAndUpdate(
+      { user: req.user?._id },
+      { $set: { isBlocked: true } }
+    );
+  }
 
-  res.status(200).json(new apiResponse(200, user, "User updated successfully"));
+  const updatedFields = {};
+
+  if (name) {
+    updatedFields.name = name;
+  }
+
+  if (email) {
+    updatedFields.email = email;
+  }
+
+  if (phone) {
+    updatedFields.phone = phone;
+  }
+
+  updatedFields.isVerified = isVerified;
+
+  try {
+    var user = await User.findByIdAndUpdate(
+      req.user?._id,
+      { $set: updatedFields },
+      { new: true }
+    ).select("-password -refreshToken");
+  } catch (error) {
+    throw new apiError(500, "Error updating user or a duplicate key found");
+  }
+
+  res
+    .status(200)
+    .json(new apiResponse(200, user, "User updated successfully"));
 });
+
+export const makeAdmin = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    throw new apiError(400, "Please provide email");
+  }
+
+  const user = await User.findOne({ email });
+  if (!user) {
+    throw new apiError(404, "User not found");
+  }
+  if(user.isAdmin){
+    throw new apiError(400, "User is already an admin");
+  }
+  if(!user.isVerified){
+    throw new apiError(400, "User is not verified, please verify the user first");
+  }
+
+  user.isAdmin = true;
+  await user.save({ validateBeforeSave: false });
+
+  res.status(200)
+  .json(new apiResponse(200, user, "User is now an admin"));
+})

@@ -31,6 +31,19 @@ export const authjwt = asyncHandler( async(req,res,next,err)=>{
     }
 })
 
+export const verifieduserauth = asyncHandler(async(req,res,next,err)=>{
+    const userid = req.user._id;
+    if(!userid) {
+        throw new apiError(401,"No token provided, please login")
+    }
+    const isverified = await User.findById(userid).select("isVerified");
+
+    if(isverified.isVerified ==true) next();
+
+    // console.log(isadmin.isAdmin);
+    else throw new apiError(401, "Unauthorized, User not verified");
+})
+
 export const sellerauth = asyncHandler(async(req,res,next,err)=>{
     const incomingToken = req.cookies?.refreshToken || req.header("Authorization")?.replace("Bearer ", "");
     if(!incomingToken) {

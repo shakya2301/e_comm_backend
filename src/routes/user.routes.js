@@ -15,8 +15,10 @@ import {
   resetPassword,
   makeAdmin
 } from "../controllers/users.controller.js";
+import { getCart } from "../controllers/carts.controller.js";
+import { getReviewsByUser, deleteReview } from "../controllers/ratings.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
-import { authjwt, adminauth } from "../middlewares/auth.middleware.js";
+import { authjwt, adminauth, verifieduserauth } from "../middlewares/auth.middleware.js";
 
 const router = express.Router();
 
@@ -43,5 +45,15 @@ router.route("/resetpassword/:token").get(upload.none(), resetPassword);
 //admin routes(special powers);
 
 router.route("/makeadmin").post(authjwt, adminauth,upload.none(), makeAdmin);
+
+//cart view 
+
+router.route('/cart').get(authjwt, getCart);
+
+//reviews and ratings routes
+
+router.route('/reviews').get(authjwt, getReviewsByUser);
+router.route('/deletereview').delete(authjwt, verifieduserauth, deleteReview)
+
 
 export default router;

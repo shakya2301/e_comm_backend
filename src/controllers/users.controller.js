@@ -8,6 +8,7 @@ import nodemailer from "nodemailer";
 import bcrypt from "bcrypt";
 import {sendMail} from "../utils/mailservice.js";
 import { Cart } from "../models/carts.model.js";
+import { Cartproduct } from "../models/cartproducts.model.js";
 
 export const registerUser = asyncHandler(async (req, res) => {
   const { name, email, password, phone } = req.body;
@@ -464,8 +465,15 @@ export const deleteUser = asyncHandler(async (req, res) => {
   if (!user) {
     throw new apiError(404, "User not found");
   }
+  //deleting the cart products now,
+  if(req.usercart){
+    await Cartproduct.deleteMany({cart:req.usercart?._id});
+  }
 
+  //deleting the cart now.
   const cart = await Cart.findOneAndDelete({ user: req.user?._id });
+
+
 
   if(user.pfp){
     const parts = user.pfp?.split("/");

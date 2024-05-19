@@ -17,6 +17,8 @@ import {
 } from "../controllers/users.controller.js";
 import { getCart } from "../controllers/carts.controller.js";
 import { getReviewsByUser, deleteReview } from "../controllers/ratings.controller.js";
+import { createUserAddress, getUserAddresses, deleteUserAddress } from "../controllers/useraddress.controller.js";
+
 import { upload } from "../middlewares/multer.middleware.js";
 import { authjwt, adminauth, verifieduserauth } from "../middlewares/auth.middleware.js";
 
@@ -54,6 +56,12 @@ router.route('/cart').get(authjwt, getCart);
 
 router.route('/reviews').get(authjwt, getReviewsByUser);
 router.route('/deletereview').delete(authjwt, verifieduserauth, deleteReview)
+
+//address routes
+
+router.route('/address/add').post(authjwt, verifieduserauth, upload.none(), createUserAddress);
+router.route('/address/display').get(authjwt, getUserAddresses);
+router.route('/address/delete').delete(authjwt, verifieduserauth, deleteUserAddress);
 
 
 export default router;

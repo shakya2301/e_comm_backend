@@ -109,8 +109,8 @@ export const getCart = asyncHandler(async (req, res) => {
 
   const cart = await Cartproduct.aggregate(pipeline);
 
-  if (!cart) {
-    return next(new apiError("Cart is empty", 404));
+  if (!cart || cart.length === 0) {
+    throw (new apiError(404, "Cart is empty"));
   }
 
   res

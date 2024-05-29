@@ -11,6 +11,7 @@ import {
 import { apiResponse } from "../utils/apiResponse.js";
 import apiError from "../utils/apiError.js";
 import slugify from "slugify";
+import mongoose from "mongoose";
 
 //verified seller only
 //seller is loggedin. seller id is in req.seller
@@ -232,8 +233,8 @@ export const deleteProduct = asyncHandler(async (req, res) => {
   //works but some reconsideration needed.
 //this is the filter functionality.
 export const getProducts = asyncHandler(async (req, res) => {
-  let { category, subcategory, brand, seller } = req.query;
-  console.log(category, subcategory, brand, seller);
+  let { category, subcategory, brand, seller, minPrice, maxPrice } = req.query;
+  console.log(category, subcategory, brand, seller, minPrice, maxPrice);
 
   // Initialize the match object with an empty condition
   let matchCondition = {};
@@ -261,6 +262,17 @@ export const getProducts = asyncHandler(async (req, res) => {
   if (seller) {
     const sellerObj = await Seller.findOne({ name: new RegExp(seller, "i") });
     matchCondition.seller = sellerObj ? sellerObj._id : null;
+  }
+
+  // Adding price range condition
+  if (minPrice || maxPrice) {
+    matchCondition.price = {};
+    if (minPrice) {
+      matchCondition.price.$gte = parseFloat(minPrice);
+    }
+    if (maxPrice) {
+      matchCondition.price.$lte = parseFloat(maxPrice);
+    }
   }
 
   // Check if any of the conditions are set to null, indicating a non-existent entity
@@ -352,154 +364,185 @@ export const getProducts = asyncHandler(async (req, res) => {
   res.status(200).json(new apiResponse(200, products, "All products"));
 });
 
-//not working :(
-export const getProductsBySearch = asyncHandler(async (req, res, next) => {
-  const { page = 1, limit = 10, sortBy = "_id", sortType = "1", minQuantity, query, brand, category, subCategory } = req.query;
-  const options = {
-    page: parseInt(page),
-    limit: parseInt(limit),
-    sort: { [sortBy]: parseInt(sortType) },
+// working :) amazingly
+export const getProductsBySearch = asyncHandler(async (req, res) => {
+  const { query = "", page = 1 } = req.query; // Note: 'page' is no longer used since pagination is removed
+
+  // Removed options related to pagination
+
+  // First, fetch all categories, subcategories, brands, and sellers that match the query
+  const categories = await Category.find({ name: new RegExp(query, "i") }).select("_id");
+  const subcategories = await Subcategory.find({ name: new RegExp(query, "i") }).select("_id");
+  const brands = await Brand.find({ name: new RegExp(query, "i") }).select("_id");
+  const sellers = await Seller.find({ name: new RegExp(query, "i") }).select("_id");
+
+  // Convert fetched documents into arrays of IDs
+  const categoryIds = categories.map(cat => cat._id);
+  const subcategoryIds = subcategories.map(sub => sub._id);
+  const brandIds = brands.map(brand => brand._id);
+  const sellerIds = sellers.map(seller => seller._id);
+
+  // Construct the match condition to search across multiple fields
+  const matchCondition = {
+      $or: [
+          { description: { $regex: query, $options: "i" } },
+          { name: { $regex: query, $options: "i" } },
+          { brand: { $in: brandIds } },
+          { category: { $in: categoryIds } },
+          { subCategory: { $in: subcategoryIds } },
+          { seller: { $in: sellerIds } },
+      ],
   };
+
+  const aggregateQuery = [
+      { $match: matchCondition },
+      {
+          $lookup: {
+              from: "brands",
+              localField: "brand",
+              foreignField: "_id",
+              as: "brand",
+          },
+      },
+      {
+          $lookup: {
+              from: "categories",
+              localField: "category",
+              foreignField: "_id",
+              as: "category",
+          },
+      },
+      {
+          $lookup: {
+              from: "subcategories",
+              localField: "subCategory",
+              foreignField: "_id",
+              as: "subCategory",
+          },
+      },
+      {
+          $lookup: {
+              from: "sellers",
+              localField: "seller",
+              foreignField: "_id",
+              as: "seller",
+          },
+      },
+      {
+          $project: {
+              name: 1,
+              description: 1,
+              price: 1,
+              countInStock: 1,
+              images: 1,
+              ratings: 1,
+              brand: { $arrayElemAt: ["$brand.name", 0] },
+              category: { $arrayElemAt: ["$category.name", 0] },
+              subCategory: { $arrayElemAt: ["$subCategory.name", 0] },
+              seller: { $arrayElemAt: ["$seller.name", 0] },
+          },
+      },
+  ];
+
+  const result = await Product.aggregate(aggregateQuery); // Directly using aggregate without pagination
+
+  if (!result || result.length === 0) {
+      throw new apiError(404, "No products found");
+  }
+
+  // Manually formatting the response to mimic the structure provided by aggregatePaginate
+  const formattedResult = {
+      docs: result,
+      totalDocs: result.length,
+      limit: result.length, // Since there's no pagination, limit can be set to the length of the result
+      totalPages: 1,
+      page: 1,
+      pagingCounter: 1,
+      hasPrevPage: false,
+      hasNextPage: false,
+      prevPage: null,
+      nextPage: null,
+  };
+
+  res.status(200).json(new apiResponse(200, formattedResult, "Products found"));
+});
+
+
+export const getProductById = asyncHandler(async (req, res) => {
+  const productId = req.params.id;
+  if (!productId) {
+    return res.status(400).json({ message: "Product ID is required" });
+  }
 
   const pipeline = [
     {
-      $match: {
-        $or: [
-          { description: { $regex: query || "", $options: "ix" } },
-          { title: { $regex: query || "", $options: "ix" } },
-          { "brand.brandname": { $regex: query || "", $options: "ix" } },
-        ],
-      },
-    },
-    {
-      $match: {
-        quantityInStock: { $gte: parseInt(minQuantity) || 0 },
-      },
-    },
-    {
-      $lookup: {
-        from: "brands",
-        localField: "brand",
-        foreignField: "_id",
-        as: "brand",
-      },
-    },
-    {
-      $unwind: "$brand",
+      $match: { _id: new mongoose.Types.ObjectId(productId) }
     },
     {
       $lookup: {
         from: "categories",
         localField: "category",
         foreignField: "_id",
-        as: "category",
-      },
+        as: "categoryDetails"
+      }
     },
     {
-      $unwind: "$category",
+      $unwind: "$categoryDetails"
     },
     {
       $lookup: {
         from: "subcategories",
-        localField: "subCategories",
+        localField: "subCategory",
         foreignField: "_id",
-        as: "subCategories",
-      },
+        as: "subCategoryDetails"
+      }
     },
     {
-      $unwind: "$subCategories",
+      $unwind: "$subCategoryDetails"
+    },
+    {
+      $lookup: {
+        from: "brands",
+        localField: "brand",
+        foreignField: "_id",
+        as: "brandDetails"
+      }
+    },
+    {
+      $unwind: "$brandDetails"
     },
     {
       $lookup: {
         from: "sellers",
-        localField: "sellerInfo",
+        localField: "seller",
         foreignField: "_id",
-        as: "sellerInfo",
-      },
+        as: "sellerDetails"
+      }
     },
     {
-      $unwind: "$sellerInfo",
-    },
-    {
-      $group: {
-        _id: "$_id",
-        title: { $first: "$title" },
-        description: { $first: "$description" },
-        price: { $first: "$price" },
-        quantityInStock: { $first: "$quantityInStock" },
-        ratings: { $first: "$ratings" },
-        brand: { $first: "$brand" },
-        category: { $first: "$category" },
-        sellerInfo: { $first: "$sellerInfo" },
-        productImage: { $first: "$productImage" },
-        list: {
-          $push: {
-            subCategoryName: "$subCategories.subCategory",
-            subCategoryID: "$subCategories._id",
-          },
-        },
-      },
+      $unwind: "$sellerDetails"
     },
     {
       $project: {
-        _id: 1,
-        title: 1,
+        name: 1,
         description: 1,
         price: 1,
-        quantityInStock: 1,
+        countInStock: 1,
+        images: 1,
+        category: "$categoryDetails.name",
+        subCategory: "$subCategoryDetails.name",
+        brand: "$brandDetails.name",
+        seller: "$sellerDetails.name",
         ratings: 1,
-        brand: {
-          brandname: "$brand.name",
-          brandID: "$brand._id",
-        },
-        category: {
-          categoryName: "$category.category",
-          categoryID: "$category._id",
-        },
-        subCategory: "$list",
-        sellerInfo: {
-          sellerName: "$sellerInfo.fullName",
-          sellerID: "$sellerInfo._id",
-          GSTNumber: "$sellerInfo.GSTnumber",
-        },
-        productImage: 1,
-      },
-    },
+      }
+    }
   ];
 
-  if (brand) {
-    pipeline.push({
-      $match: {
-        "brand.brandname": { $regex: brand || "", $options: "ix" },
-      },
-    });
+  const productDetails = await Product.aggregate(pipeline);
+
+  if (!productDetails || productDetails.length === 0) {
+    return res.status(404).json({ message: "Product not found" });
   }
 
-  if (category) {
-    pipeline.push({
-      $match: {
-        "category.categoryName": { $regex: category || "", $options: "i" },
-      },
-    });
-  }
-
-  if (subCategory) {
-    pipeline.push({
-      $match: {
-        "subCategory.subCategoryName": {
-          $regex: subCategory || "",
-          $options: "i",
-        },
-      },
-    });
-  }
-
-  const aggregate = Product.aggregate(pipeline);
-  const products = await Product.aggregatePaginate(aggregate, options);
-
-  if (products.length === 0) {
-    return next(new apiError(404, "No products found"));
-  }
-
-  return res.status(200).json(new apiResponse(200, products, "Products found"));
+  res.status(200).json({ status: 200, data: productDetails[0], message: "Product found" });
 });

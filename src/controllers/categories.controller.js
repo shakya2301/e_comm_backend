@@ -31,23 +31,45 @@ export const createCategory = asyncHandler(async(req,res)=> {
     })
     
     //works
-export const getAllCategories = asyncHandler(async(req,res)=> {
-    const categories = await Category.find().select("-__v -_id ");
-    if(!categories){
-        res.status(404);
-        throw new apiError(400, 'No categories found');
-    }
-    if(categories.length == 0){
-        res.status(404);
-        throw new apiError(400, 'No categories found');
-    }
-    res.status(200)
-    .json(
-        new apiResponse(200,
-        categories,
-        'All categories')
-    )
-})
+    export const getAllCategories = asyncHandler(async (req, res) => {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 5;
+      
+        const totalCategories = await Category.countDocuments();
+        const totalPages = Math.ceil(totalCategories / limit);
+      
+        const categories = await Category.aggregate([
+          { $sort: { _id: 1 } },
+          { $group: { _id: null, categories: { $push: "$$ROOT" } } },
+          {
+            $project: {
+              categories: {
+                $concatArrays: [
+                  { $slice: ["$categories", (page - 1) * limit, limit] },
+                  { $slice: ["$categories", limit, totalCategories] },
+                ],
+              },
+            },
+          },
+          { $unwind: "$categories" },
+          { $replaceRoot: { newRoot: "$categories" } },
+          { $project: { _id: 0, __v: 0 } },
+        ]);
+      
+        if (!categories || categories.length === 0) {
+          res.status(404);
+          throw new apiError(400, 'No categories found');
+        }
+      
+        res.status(200).json(
+          new apiResponse(200, {
+            categories,
+            totalPages,
+            currentPage: page,
+          }, 'All categories')
+        );
+      });
+      
 
 //works
 export const getCategoryDetails = asyncHandler(async(req,res)=> {

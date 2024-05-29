@@ -68,7 +68,7 @@ export const loginUser = asyncHandler(async (req, res) => {
     },
     `${process.env.ACCESS_TOKEN_SECRET}`,
     {
-      expiresIn: "1d",
+      expiresIn: "1h",
     }
   );
 
@@ -78,7 +78,7 @@ export const loginUser = asyncHandler(async (req, res) => {
     },
     `${process.env.REFRESH_TOKEN_SECRET}`,
     {
-      expiresIn: "7d",
+      expiresIn: "1d",
     }
   );
 
@@ -91,12 +91,14 @@ export const loginUser = asyncHandler(async (req, res) => {
   res
     .status(200)
     .cookie("accessToken", accessToken, {
-      httpOnly: true,
+      httpOnly: false,
       secure: true,
+      expires: new Date(Date.now() + 3600000),
     })
-    .cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: true,
+    .cookie("refreshToken", refreshToken,{
+      httpOnly:false,
+      secure:true,
+      expires : new Date(Date.now() + 86400000)
     })
     .json(
       new apiResponse(200, {
@@ -167,7 +169,7 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
     },
     `${process.env.ACCESS_TOKEN_SECRET}`,
     {
-      expiresIn: "1d",
+      expiresIn: "1h",
     }
   );
 
@@ -177,7 +179,7 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
     },
     `${process.env.REFRESH_TOKEN_SECRET}`,
     {
-      expiresIn: "7d",
+      expiresIn: "1d",
     }
   );
 
@@ -223,10 +225,10 @@ export const uploadAvatar = asyncHandler(async (req, res) => {
 
   // delete the previous image from cloudinary...
 
-  const parts = req.user.pfp?.split("/");
-  const oldAvatarPublicId = parts[parts.length - 1].split(".")[0];
-
+  const parts = req.user?.pfp?.split("/") || null;
+  
   if (parts) {
+    const oldAvatarPublicId = parts[parts?.length - 1].split(".")[0] || null;
     const deleteOldAvatar = await deleteFromCloudinary(oldAvatarPublicId);
     if (!deleteOldAvatar) {
       throw new apiError(500, "Error in deleting old avatar");
@@ -500,7 +502,10 @@ export const displayUser = asyncHandler(async (req, res) => {
   if (!result) {
     throw new apiError(404, "No user found");
   }
-  res.status(200).json(new apiResponse(200, {result, cart}, "User found successfully"));
+  const userdata = await User.findById(req?.user._id).select(
+    "-password -refreshToken"
+  );
+  res.status(200).json(new apiResponse(200, {userdata}, "User found successfully"));
 });
 
 export const modifyUser = asyncHandler(async (req, res) => {

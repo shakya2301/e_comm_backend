@@ -16,11 +16,11 @@ export const addProductToCart = asyncHandler(async (req, res) => {
     throw new apiError(400, "Product ID is required");
   }
 
-  if(!quantity || isNaN(quantity) || quantity <= 0) {
+  if (!quantity || isNaN(quantity) || quantity <= 0) {
     throw new apiError(400, "Quantity is required and must be a number greater than 0");
   }
 
-  const product = await Product.findById(productId);
+  const product = await Product.findById(productId).populate('seller', 'name'); // Assuming 'seller' is a reference in the Product model
   if (!product) {
     throw new apiError(404, "Product not found");
   }
@@ -32,48 +32,51 @@ export const addProductToCart = asyncHandler(async (req, res) => {
   if (!req.usercart) {
     return next(new apiError("Cart not found, please verify yourself", 404));
   }
-  const cartid = req.usercart?._id;
 
+  const cartId = req.usercart?._id;
   if (req.usercart.isBlocked) {
     return next(new apiError("Cart is blocked, please verify yourself", 403));
   }
 
-  let cartproduct = await Cartproduct.findOne({
-    cart: cartid,
+  let cartProduct = await Cartproduct.findOne({
+    cart: cartId,
     product: productId,
   });
 
   let newCartProduct;
-
-  if (cartproduct) {
-    cartproduct.quantity = quantity;
-    newCartProduct = await cartproduct.save();
-  } else { 
-      newCartProduct = await Cartproduct.create({
-        cart: cartid,
-        product: productId,
-        quantity,
-      });
+  if (cartProduct) {
+    cartProduct.quantity = quantity;
+    newCartProduct = await cartProduct.save();
+  } else {
+    newCartProduct = await Cartproduct.create({
+      cart: cartId,
+      product: productId,
+      quantity,
+    });
   }
 
-  res
-    .status(200)
-    .json(
-      new apiResponse(200, newCartProduct, "Product added to cart successfully")
-    );
+  // Construct the response object with product details and cart information
+  const response = {
+    productId: product._id,
+    productName: product.name,
+    productPrice: product.price,
+    seller: product.seller.name, // Assuming the seller's name is what's needed
+    cartId: cartId,
+    quantity: newCartProduct.quantity,
+  };
+
+  res.status(200).json(new apiResponse(200, response, "Product added to cart successfully"));
 });
 
-export const getCart = asyncHandler(async (req, res) => {
-  const cartid = req.usercart?._id;
 
+export const getCart = asyncHandler(async (req, res, next) => {
+  const cartid = req.usercart?._id;
   if (!cartid) {
     return next(new apiError("Cart not found, please verify yourself", 404));
   }
-
   if (req.usercart.isBlocked) {
     return next(new apiError("Cart is blocked, please verify yourself", 403));
   }
-
   const pipeline = [
     {
       $match: {
@@ -85,38 +88,35 @@ export const getCart = asyncHandler(async (req, res) => {
         from: "products",
         localField: "product",
         foreignField: "_id",
-        as: "product",
+        as: "productInfo",
       },
     },
     {
-      $unwind: "$product",
-    },
-    {
-      $group: {
-        _id: null,
-        totalQuantity: { $sum: "$quantity" },
-        products: { $push: "$product" },
-      },
+      $unwind: "$productInfo",
     },
     {
       $project: {
         _id: 0,
-        totalQuantity: 1,
-        products: 1,
+        cartId: "$cart",
+        productId: "$productInfo._id",
+        productName: "$productInfo.name",
+        productPrice: "$productInfo.price",
+        seller: "$productInfo.seller",
+        quantity: 1,
       },
     },
   ];
-
-  const cart = await Cartproduct.aggregate(pipeline);
-
-  if (!cart || cart.length === 0) {
-    throw (new apiError(404, "Cart is empty"));
+  const cartProducts = await Cartproduct.aggregate(pipeline);
+  if (!cartProducts || cartProducts.length === 0) {
+    return res.status(404).json(new apiError(404, "Cart is empty"));
   }
-
-  res
-    .status(200)
-    .json(new apiResponse(200, cart[0], "Cart fetched successfully"));
+  // Since the original addProductToCart controller returns a single product addition, 
+  // for consistency, we might need to adjust the logic to return a similar structure for each product in the cart.
+  // However, this example will return all products in the cart matching the requested structure.
+  res.status(200).json(new apiResponse(200, { cartId: cartid, products: cartProducts }, "Cart fetched successfully"));
 });
+
+
 
 export const removeProductFromCart = asyncHandler(async (req, res) => {
     const { productId } = req.query;

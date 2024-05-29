@@ -36,7 +36,7 @@ router.route("/sendmail").post(authjwt, sendEmail);
 router.route("/verifyotp").post(authjwt, upload.none(), verifyOtp);
 router.route("/changepassword").post(authjwt, upload.none(), changePassword);
 router.route("/delete").delete(authjwt, deleteUser, logoutUser);
-router.route("/display").get(authjwt, displayUser);
+router.route("/display").post(authjwt, displayUser);
 router.route("/modify").post(authjwt,upload.none(), modifyUser);
 
 //forgot password routes;

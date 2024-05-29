@@ -1,4 +1,5 @@
 import mongoose, {Schema} from 'mongoose';
+import mongooseAggregatePaginate from 'mongoose-aggregate-paginate-v2';
 import slugify from 'slugify';
 
 const categorySchema = new Schema({
@@ -16,6 +17,7 @@ const categorySchema = new Schema({
 },
 {timestamps: true});
 
+categorySchema.plugin(mongooseAggregatePaginate);
 categorySchema.pre('save', function(next){
     const slug = slugify(this.name, {lower: true});
     this.name = slug;

@@ -6,7 +6,13 @@ import cors from 'cors';
 
 const app = express();
 
-app.use(cors({origin: `*`, optionSuccessStatus: 200})); //configuring cors {read documentation}
+app.use(cors(
+  {
+    origin: `http://localhost:5173`,
+    // accessControlAllowOrigin: `http://localhost:5173`,
+    credentials: true,
+  }
+)); //configuring cors {read documentation}
 
 //JSON Handled.
 app.use(express.json()); // the middleware offered by express to parse incoming requests with JSON payloads...avoided the options, can be seen in documentation

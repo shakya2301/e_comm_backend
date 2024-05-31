@@ -28,6 +28,12 @@ export const ordersSchema = new Schema({
         default: null
     },
 
+    orderId: {
+        type: String,
+        default: null,
+        unique: true
+    }
+
 },
 {timestamps: true});
 

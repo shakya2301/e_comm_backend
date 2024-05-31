@@ -26,10 +26,10 @@ const orderItemsSchema = new Schema({
         default: 1
     },
 
-    price : {
-        type: Number,
-        required: true
-    },
+    // price : {
+    //     type: Number,
+    //     required: true
+    // },
 
     status : {
         type: String,
@@ -37,12 +37,13 @@ const orderItemsSchema = new Schema({
         default: 'pending'
     },
 
-    seller : {
-        type: Schema.Types.ObjectId,
-        ref: 'Seller',
-        required: true
-    }
-})
+    // seller : {
+    //     type: Schema.Types.ObjectId,
+    //     ref: 'Seller',
+    //     required: true
+    // }
+},
+{timestamps:true})
 
 orderItemsSchema.plugin(mongooseAggregatePaginate);
 

@@ -23,6 +23,10 @@ const userAddressSchema = new Schema({
     },
     country : {
         type:String
+    },
+    isDeleted: {
+        type: Boolean,
+        default: false
     }
 })
 

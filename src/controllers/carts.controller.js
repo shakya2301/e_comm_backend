@@ -102,6 +102,7 @@ export const getCart = asyncHandler(async (req, res, next) => {
         productName: "$productInfo.name",
         productPrice: "$productInfo.price",
         seller: "$productInfo.seller",
+        images : "$productInfo.images",
         quantity: 1,
       },
     },
@@ -143,6 +144,24 @@ export const removeProductFromCart = asyncHandler(async (req, res) => {
         .status(200)
         .json(
         new apiResponse(200, cartproduct, "Product removed from cart successfully")
+        );
+})
+
+export const clearCart = asyncHandler(async (req, res) => {
+    const cartid = req.usercart?._id;
+    
+    if (!cartid) {
+        throw (new apiError(400, "Cart not found, please verify yourself"));
+    }
+    
+    const cartproducts = await Cartproduct.deleteMany({
+        cart: cartid,
+    });
+    
+    res
+        .status(200)
+        .json(
+        new apiResponse(200, cartproducts, "Cart cleared successfully")
         );
 })
 

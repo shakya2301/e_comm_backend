@@ -15,12 +15,13 @@ import {
   resetPassword,
   makeAdmin
 } from "../controllers/users.controller.js";
-import { getCart } from "../controllers/carts.controller.js";
+import { getCart, clearCart } from "../controllers/carts.controller.js";
 import { getReviewsByUser, deleteReview } from "../controllers/ratings.controller.js";
 import { createUserAddress, getUserAddresses, deleteUserAddress } from "../controllers/useraddress.controller.js";
 
 import { upload } from "../middlewares/multer.middleware.js";
 import { authjwt, adminauth, verifieduserauth } from "../middlewares/auth.middleware.js";
+import {createOrder, validateOrder, orderSuccess, } from "../controllers/orders.controller.js";
 
 const router = express.Router();
 
@@ -51,6 +52,7 @@ router.route("/makeadmin").post(authjwt, adminauth,upload.none(), makeAdmin);
 //cart view 
 
 router.route('/cart').get(authjwt, getCart);
+router.route('/clearcart').post(authjwt, clearCart);
 
 //reviews and ratings routes
 
@@ -60,8 +62,15 @@ router.route('/deletereview').delete(authjwt, verifieduserauth, deleteReview)
 //address routes
 
 router.route('/address/add').post(authjwt, verifieduserauth, upload.none(), createUserAddress);
-router.route('/address/display').get(authjwt, getUserAddresses);
+router.route('/address/display').post(authjwt, getUserAddresses);
 router.route('/address/delete').delete(authjwt, verifieduserauth, deleteUserAddress);
+
+
+//order routes
+
+router.route('/order/create').post(authjwt, createOrder);
+router.route('/order/validate').post(validateOrder);
+router.route('/order/success').post(authjwt, orderSuccess);
 
 
 export default router;

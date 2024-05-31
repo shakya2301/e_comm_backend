@@ -37,7 +37,7 @@ export const getUserAddresses = asyncHandler(async (req,res)=>{
         throw new apiError(404,"User not found");
     }
 
-    const userAddresses = await Useraddress.find({user:user._id});
+    const userAddresses = await Useraddress.find({user:user._id , isDeleted:false});
 
     if(!userAddresses){
         throw new apiError(404,"No addresses found for this user");
@@ -62,7 +62,7 @@ export const deleteUserAddress = asyncHandler(async(req,res)=>{
         throw new apiError(404,"Address not found");
     }
 
-    const response = await Useraddress.deleteOne({_id:addressId}).exec();
+    const response = await Useraddress.updateOne({_id:addressId}, {isDeleted:true});
 
     res.status(200).json(
         new apiResponse(200, response, "Address deleted successfully")

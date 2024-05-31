@@ -16,7 +16,9 @@ const cartProductsSchema = new Schema({
     required: true,
     default: 1,
   },
-});
+  
+},
+{ timestamps: true });
 
 cartProductsSchema.plugin(mongooseAggregatePaginate);
 

@@ -37,7 +37,7 @@ const productSchema = new Schema(
         },
         subCategory: {
             type: Schema.Types.ObjectId,
-            ref: "Subcategory",
+            ref: "SubCategory",
             required: true,
             trim: true,
             lowercase: true
@@ -55,6 +55,10 @@ const productSchema = new Schema(
             type: Schema.Types.ObjectId,
             ref: 'Brand',
             default: null
+        },
+        isDeleted: {
+            type: Boolean,
+            default: false
         }
 
     },

@@ -108,9 +108,9 @@ export const getCart = asyncHandler(async (req, res, next) => {
     },
   ];
   const cartProducts = await Cartproduct.aggregate(pipeline);
-  if (!cartProducts || cartProducts.length === 0) {
-    return res.status(404).json(new apiError(404, "Cart is empty"));
-  }
+  // if (!cartProducts || cartProducts.length === 0) {
+  //   return res.status(404).json(new apiError(404, "Cart is empty"));
+  // }
   // Since the original addProductToCart controller returns a single product addition, 
   // for consistency, we might need to adjust the logic to return a similar structure for each product in the cart.
   // However, this example will return all products in the cart matching the requested structure.

@@ -28,7 +28,7 @@ export const registerSeller = asyncHandler(async (req, res) => {
   if (seller) {
     throw new apiError(400, "Seller already exists");
   }
-  niche = niche.split(",");
+  niche = niche.split(" ");
   if (niche.length === 0) {
     throw new apiError(400, "Please provide at least one niche");
   }
@@ -158,12 +158,14 @@ export const loginSeller = asyncHandler(async (req, res) => {
   res
     .status(200)
     .cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: true,
+      httpOnly: false,
+      secure: false,
+      expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     })
     .cookie("accessToken", accessToken, {
-      httpOnly: true,
-      secure: true,
+      httpOnly: false,
+      secure: false,
+      expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
     })
     .json(new apiResponse(200, sellerData, "Seller logged in successfully"));
 });
@@ -559,4 +561,20 @@ export const deleteSeller = asyncHandler(async (req, res) => {
     .clearCookie("refreshToken")
     .clearCookie("otp")
     .json(new apiResponse(200, seller, "Seller deleted successfully"));
+});
+
+export const getProductsBySeller = asyncHandler(async (req, res) => {
+  const sellerId = req.seller._id;
+  // Assuming 'category', 'subCategory', and 'brand' are the correct field names in your Product model
+  const products = await Product.find({ seller: sellerId })
+    .populate('category', 'name') // Populates the category field, fetching only the name
+    .populate('brand', 'name') // Populates the brand field, fetching only the name
+    .populate('subCategory', 'name') // Populates the subCategory field, fetching only the name
+    .exec();
+
+  if (!products || products.length === 0) {
+    return res.status(404).json(new apiResponse(404, {}, "No products found for this seller"));
+  }
+
+  res.status(200).json(new apiResponse(200, products, "Products fetched successfully"));
 });

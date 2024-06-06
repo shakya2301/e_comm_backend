@@ -21,7 +21,7 @@ import { createUserAddress, getUserAddresses, deleteUserAddress } from "../contr
 
 import { upload } from "../middlewares/multer.middleware.js";
 import { authjwt, adminauth, verifieduserauth } from "../middlewares/auth.middleware.js";
-import {createOrder, validateOrder, orderSuccess, } from "../controllers/orders.controller.js";
+import {createOrder, validateOrder, orderSuccess, getOrdersByUser, cancelOrderByUser } from "../controllers/orders.controller.js";
 
 const router = express.Router();
 
@@ -31,7 +31,7 @@ router.route("/login").post(upload.none(), loginUser);
 // secured routes:
 
 router.route("/logout").post(authjwt, logoutUser);
-router.route("/refresh").post(refreshAccessToken);
+router.route("/refresh").post(authjwt, refreshAccessToken);
 router.route("/changeavatar").post(authjwt, upload.single("avatar"), uploadAvatar);
 router.route("/sendmail").post(authjwt, sendEmail);
 router.route("/verifyotp").post(authjwt, upload.none(), verifyOtp);
@@ -63,7 +63,7 @@ router.route('/deletereview').delete(authjwt, verifieduserauth, deleteReview)
 
 router.route('/address/add').post(authjwt, verifieduserauth, upload.none(), createUserAddress);
 router.route('/address/display').post(authjwt, getUserAddresses);
-router.route('/address/delete').delete(authjwt, verifieduserauth, deleteUserAddress);
+router.route('/address/delete').post(authjwt, verifieduserauth, deleteUserAddress);
 
 
 //order routes
@@ -71,6 +71,9 @@ router.route('/address/delete').delete(authjwt, verifieduserauth, deleteUserAddr
 router.route('/order/create').post(authjwt, createOrder);
 router.route('/order/validate').post(validateOrder);
 router.route('/order/success').post(authjwt, orderSuccess);
+// router.route('/order/fail').post(authjwt, orderFail);
+router.route('/order/display').get(authjwt, getOrdersByUser);
+router.route('/order/cancel').post(authjwt, cancelOrderByUser);
 
 
 export default router;

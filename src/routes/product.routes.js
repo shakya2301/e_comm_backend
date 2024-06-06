@@ -8,7 +8,7 @@ import { writeReview, getReviewsByProductId } from '../controllers/ratings.contr
 const router = Router();
 
 router.route('/create').post(sellerauth, sellerverifiedauth, sellerauthorizedauth, upload.array('images', 4), createProduct);
-router.route('/modify/:id').patch(sellerauth, sellerverifiedauth, upload.array('images', 4), modifyProduct);
+router.route('/modify/:id').post(sellerauth, sellerverifiedauth, upload.array('images', 4), modifyProduct);
 router.route('/delete/:id').delete(sellerauth, sellerverifiedauth, deleteProduct);
 router.route('/:id').get(getProductById);
 router.route('/filter').post(getProducts);

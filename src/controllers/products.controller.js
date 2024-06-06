@@ -3,6 +3,7 @@ import { Category } from "../models/categories.model.js";
 import { Subcategory } from "../models/subcategories.model.js";
 import { Seller } from "../models/sellers.model.js";
 import { Brand } from "../models/brands.model.js";
+import {Orderitem} from "../models/orderItems.model.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import {
   deleteFromCloudinary,
@@ -149,10 +150,9 @@ export const modifyProduct = asyncHandler(async (req, res) => {
     res.status(400);
     throw new apiError(400, "No fields to update");
   }
-  subCategory =
-    (await Subcategory.findOne({ name: slugify(subCategory) })._id) || null;
-  category = (await Category.findOne({ name: slugify(category) })._id) || null;
-  brand = (await Brand.findOne({ name: slugify(brand) })._id) || null;
+  if(subCategory) subCategory = (await Subcategory.findOne({ name: slugify(subCategory) })._id) || null;
+  if(category) category = (await Category.findOne({ name: slugify(category) })._id) || null;
+  if(brand) brand = (await Brand.findOne({ name: slugify(brand) })._id) || null;
   newImages =
     newImages && newImages.length > 0
       ? await Promise.all(
@@ -209,26 +209,32 @@ export const deleteProduct = asyncHandler(async (req, res) => {
       res.status(401);
       throw new apiError(401, "Unauthorized to delete product");
     }
-    if (product.images && product.images.length > 0) {
-      const deleteImages = await Promise.all(
-        product.images.map(async (image) => {
-          const parts = image.split("/");
-          const publicId = parts[parts.length - 1].split(".")[0];
-          return await deleteFromCloudinary(publicId);
-        })
-      );
-      if (!deleteImages.every((result) => result)) {
-        throw new apiError(500, "Error in deleting product images");
+
+    Product.findByIdAndUpdate(productId, { isDeleted: true });
+
+    if(!Boolean(Orderitem.findOne({product:productId}))){
+      if (product.images && product.images.length > 0) {
+        const deleteImages = await Promise.all(
+          product.images.map(async (image) => {
+            const parts = image.split("/");
+            const publicId = parts[parts.length - 1].split(".")[0];
+            return await deleteFromCloudinary(publicId);
+          })
+        );
+        if (!deleteImages.every((result) => result)) {
+          throw new apiError(500, "Error in deleting product images");
+        }
+      }
+      const deletedProduct = await Product.findByIdAndDelete(productId);
+      if (!deletedProduct) {
+        res.status(500);
+        throw new apiError(500, "Error deleting product");
       }
     }
-    const deletedProduct = await Product.findByIdAndDelete(productId);
-    if (!deletedProduct) {
-      res.status(500);
-      throw new apiError(500, "Error deleting product");
-    }
+    
     res
       .status(200)
-      .json(new apiResponse(200, deletedProduct, "Product deleted successfully"));
+      .json(new apiResponse(200, {}, "Product deleted successfully"));
   });
   //works but some reconsideration needed.
 //this is the filter functionality.
@@ -238,6 +244,9 @@ export const getProducts = asyncHandler(async (req, res) => {
 
   // Initialize the match object with an empty condition
   let matchCondition = {};
+
+  matchCondition.isDeleted = {$ne: true};
+  matchCondition.countInStock = {$gt: 0};
 
   // Use regex for case-insensitive matching and partial matches
   // Set an impossible condition if the entity does not exist
@@ -274,6 +283,7 @@ export const getProducts = asyncHandler(async (req, res) => {
       matchCondition.price.$lte = parseFloat(maxPrice);
     }
   }
+  
 
   // Check if any of the conditions are set to null, indicating a non-existent entity
   if (

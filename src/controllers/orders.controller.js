@@ -12,6 +12,7 @@ import dotenv from "dotenv";
 import mongoose from "mongoose";
 import { User } from "../models/users.model.js";
 import { Useraddress } from "../models/useraddress.model.js";
+import { pipeline } from "stream";
 
 dotenv.config({
     path: "./.env",
@@ -164,3 +165,158 @@ export const orderSuccess = asyncHandler(async (req, res) => {
 export const orderFailed = asyncHandler(async (req, res) => {
   res.status(200).json(new apiResponse(200, null, "Payment failed"));
 });
+
+
+export const getOrdersByUser = asyncHandler(async (req, res) => {
+  const userid = req.user._id;
+
+  const pipeline = [
+    {
+      $match: {
+        user: new mongoose.Types.ObjectId(userid),
+      },
+    },
+    {
+      $lookup: {
+        from: "orderitems",
+        localField: "_id",
+        foreignField: "orderId",
+        as: "orderItems",
+      },
+    },
+    {
+      $unwind: {
+        path: "$orderItems",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $lookup: {
+        from: "products",
+        localField: "orderItems.product",
+        foreignField: "_id",
+        as: "productDetails",
+      },
+    },
+    {
+      $unwind: {
+        path: "$productDetails",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $group: {
+        _id: "$_id",
+        orderItems: {
+          $push: {
+            product: "$productDetails",
+            quantity: "$orderItems.quantity",
+            price: { $multiply: ["$orderItems.quantity", "$productDetails.price"] },
+          },
+        },
+        user: { $first: "$user" },
+        address: { $first: "$address" },
+        createdAt: { $first: "$createdAt" },
+        updatedAt: { $first: "$updatedAt" },
+        totalAmount: { $sum: { $multiply: ["$orderItems.quantity", "$productDetails.price"] } },
+      },
+    },
+    {
+      $lookup: {
+        from: "orders",
+        localField: "_id",
+        foreignField: "_id",
+        as: "orderDetails",
+      },
+    },
+    {
+      $unwind: {
+        path: "$orderDetails",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $project: {
+        "user.password": 0,
+        "user.createdAt": 0,
+        "user.updatedAt": 0,
+        "user.__v": 0,
+        "address.createdAt": 0,
+        "address.updatedAt": 0,
+        "address.__v": 0,
+        "orderItems.product.__v": 0,
+        "orderItems.product.createdAt": 0,
+        "orderItems.product.updatedAt": 0,
+      },
+    },
+  ];
+
+  try {
+    const orders = await Order.aggregate(pipeline);
+    if (!orders || orders.length === 0) {
+      throw new apiError(404, "No orders found");
+    }
+    res.status(200).json(new apiResponse(200, orders, "Orders retrieved successfully"));
+  } catch (error) {
+    console.error(error);
+    throw new apiError(400, "Error fetching orders");
+  }
+});
+
+export const cancelOrderByUser = asyncHandler(async (req, res) => {
+  let { orderId } = req.body;
+  const userId = req.user._id;
+
+  // orderId = new mongoose.Types.ObjectId(orderId);
+
+  const order = await Order.findById(orderId);
+  if (!order) {
+    throw new apiError(404, "Order not found");
+  }
+
+  if (order.user.toString() !== userId.toString()) {
+    throw new apiError(403, "You do not have permission to cancel this order");
+  }
+
+  if (order.status !== 'pending') {
+    throw new apiError(400, "Only pending orders can be cancelled");
+  }
+
+  try {
+    await order.updateOne({ status: "cancelled" });
+  } catch (error) {
+    console.error(error);
+    throw new apiError(400, "Error cancelling order");
+  }
+
+  res.status(200).json(new apiResponse(200, {}, "Order cancelled successfully"));
+});
+
+export const repeatOrder = asyncHandler(async (req, res) => {
+  let {orderId} = req.params;
+  const userId = req.user._id;
+
+  const order = await Order.findOne({orderId: orderId});
+  const orderItems = await Orderitem.find({ orderId: order._id });
+
+  //new orderID generation
+
+  try {
+    var options = {
+      amount: amount, // amount in the smallest currency unit
+      currency: "INR",
+      receipt: reciept,
+    };
+    console.log(instance);
+    instance.orders.create(options, function (err, order) {
+      console.log(order);
+      res.status(200)
+      .json(
+        new apiResponse(200, order, "Order created successfully")
+      )
+    });
+  } catch (error) {
+    console.log(error);
+    throw new apiError(400, "Order creation failed");
+  }
+})

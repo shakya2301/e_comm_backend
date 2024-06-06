@@ -3,6 +3,9 @@ import asyncHandler from '../utils/asyncHandler.js';
 import {User} from '../models/users.model.js';
 import {Cart} from '../models/carts.model.js';
 import {Seller} from '../models/sellers.model.js';
+import {Product} from '../models/products.model.js';
+import {Category} from '../models/categories.model.js';
+import {Order} from '../models/orders.model.js';
 import apiError from '../utils/apiError.js';
 
 export const authjwt = asyncHandler( async(req,res,next,err)=>{

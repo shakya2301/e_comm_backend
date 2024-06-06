@@ -11,7 +11,7 @@ export const createUserAddress = asyncHandler(async (req,res)=>{
         throw new apiError(400,"Address Line 1, City, State and Country are required");
     }
 
-    const previousAddresses = await Useraddress.find({user:user._id});
+    const previousAddresses = await Useraddress.find({user:user._id, isDeleted:false});
     if(previousAddresses.length >= 3){
         throw new apiError(400,"You can only have a maximum of 3 addresses only, delete an existing address to add a new one");
     }

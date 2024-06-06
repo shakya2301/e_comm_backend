@@ -11,7 +11,8 @@ import {
     changePassword,
     forgotPassword,
     resetPassword,
-    deleteSeller
+    deleteSeller,
+    getProductsBySeller
 } from "../controllers/sellers.controller.js";
 import { sellerauth } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.middleware.js";
@@ -30,5 +31,7 @@ router.route('/changepassword').post(sellerauth, upload.none(), changePassword);
 router.route('/forgotpassword').post(upload.none(), forgotPassword);
 router.route('/resetpassword/:token').get(upload.none(), resetPassword);
 router.route('/delete').delete(sellerauth, deleteSeller,logoutSeller);
+
+router.route('/products').post(sellerauth, getProductsBySeller);
 
 export default router;
